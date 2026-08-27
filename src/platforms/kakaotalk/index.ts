@@ -26,6 +26,7 @@ export type {
   KakaoMultiPhotoExtra,
   KakaoPhotoExtra,
   KakaoProfile,
+  KakaoEditResult,
   KakaoReactionResult,
   KakaoReplyExtra,
   KakaoReplyTarget,
