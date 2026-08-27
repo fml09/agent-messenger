@@ -8,6 +8,7 @@ import {
   buildTypingActionBody,
   REACTION_ACTION_METHOD,
   REWRITE_MESSAGE_METHOD,
+  removeReactionPacket,
   sendReactionPacket,
   sendTypingPacket,
   rewriteMessagePacket,
@@ -163,6 +164,20 @@ describe('Kakao mutation packet boundaries', () => {
       method: REACTION_ACTION_METHOD,
       body: buildReactionActionBody(Long.fromString('123'), Long.fromString('456'), 1),
     })
+  })
+  it('removes a reaction through the same ACTION toggle packet', async () => {
+    const expected = { statusCode: 0, body: { status: 0 } }
+    const { connection, sent } = fakeConnection(expected)
+
+    const result = await removeReactionPacket(connection, Long.fromString('123'), Long.fromString('456'), 1)
+
+    expect(result).toBe(expected)
+    expect(sent).toEqual([
+      {
+        method: REACTION_ACTION_METHOD,
+        body: buildReactionActionBody(Long.fromString('123'), Long.fromString('456'), 1),
+      },
+    ])
   })
 
   it('sends REWRITE messages and propagates the LocoPacket', async () => {

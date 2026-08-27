@@ -1339,6 +1339,25 @@ export class KakaoTalkClient {
       }
     })
   }
+  async removeReaction(chatId: string, logId: string, reactionType: number): Promise<KakaoReactionResult> {
+    const parsedChatId = parseChatId(chatId)
+    const parsedLogId = parseLogId(logId)
+    return this.executeWithReconnect(async ({ session }) => {
+      try {
+        const response = await session.removeReaction(parsedChatId, parsedLogId, reactionType)
+        const statusCode = mutationStatusCode(response)
+        return {
+          success: statusCode === 0,
+          status_code: statusCode,
+          chat_id: chatId,
+          log_id: logId,
+          reaction_type: reactionType,
+        }
+      } catch (error) {
+        throw wrapError(error, 'remove_reaction_failed')
+      }
+    })
+  }
 
   async editMessage(chatId: string, logId: string, text: string): Promise<KakaoEditResult> {
     const parsedChatId = parseChatId(chatId)

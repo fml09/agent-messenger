@@ -14,6 +14,7 @@ const mockGetMembersByIds = mock(() => Promise.resolve({}))
 const mockSyncMessages = mock(() => Promise.resolve({}))
 const mockSendMessage = mock(() => Promise.resolve({}))
 const mockAddReaction = mock(() => Promise.resolve({}))
+const mockRemoveReaction = mock(() => Promise.resolve({}))
 const mockSendReply = mock(() => Promise.resolve({}))
 const mockEditMessage = mock(() => Promise.resolve({}))
 const mockMarkRead = mock(() => Promise.resolve({}))
@@ -36,6 +37,7 @@ mock.module('./protocol/session', () => ({
     syncMessages = mockSyncMessages
     sendMessage = mockSendMessage
     addReaction = mockAddReaction
+    removeReaction = mockRemoveReaction
     editMessage = mockEditMessage
     sendReply = mockSendReply
     markRead = mockMarkRead
@@ -78,6 +80,7 @@ function resetAllMocks() {
   mockGetAllMembers.mockReset()
   mockGetMembersByIds.mockReset()
   mockSyncMessages.mockReset()
+  mockRemoveReaction.mockReset()
   mockSendMessage.mockReset()
   mockAddReaction.mockReset()
   mockEditMessage.mockReset()
@@ -1681,6 +1684,43 @@ describe('KakaoTalkClient', () => {
       await expect(client.addReaction('100', '42', 1)).rejects.toMatchObject({
         name: 'KakaoTalkError',
         code: 'add_reaction_failed',
+      })
+      client.close()
+    })
+  })
+  describe('removeReaction', () => {
+    it('uses the same ACTION toggle packet through the session method', async () => {
+      mockRemoveReaction.mockResolvedValueOnce({ statusCode: 0, body: {} })
+      const client = await new KakaoTalkClient().login({ oauthToken: 'token', userId: 'user1', deviceUuid: 'device1' })
+
+      const result = await client.removeReaction('100', '42', 1)
+
+      const [chatIdArg, logIdArg, reactionType] = mockRemoveReaction.mock.calls[0] as [
+        { toString(): string },
+        { toString(): string },
+        number,
+      ]
+      expect(chatIdArg.toString()).toBe('100')
+      expect(logIdArg.toString()).toBe('42')
+      expect(reactionType).toBe(1)
+      expect(result).toEqual({
+        success: true,
+        status_code: 0,
+        chat_id: '100',
+        log_id: '42',
+        reaction_type: 1,
+      })
+
+      client.close()
+    })
+
+    it('wraps ACTION transport errors', async () => {
+      mockRemoveReaction.mockRejectedValueOnce(new Error('Socket closed'))
+      const client = await new KakaoTalkClient().login({ oauthToken: 'token', userId: 'user1', deviceUuid: 'device1' })
+
+      await expect(client.removeReaction('100', '42', 1)).rejects.toMatchObject({
+        name: 'KakaoTalkError',
+        code: 'remove_reaction_failed',
       })
       client.close()
     })

@@ -50,6 +50,12 @@ export async function sendTypingPacket(
 // ACTION is also used by the official client for message reactions. The
 // payload differs from the typing subtype: reactions target a logId and carry
 // the selected reaction type.
+//
+// There is no separate reaction-removal opcode in the verified LOCO
+// references. Kakao emits the same ACTION request for a reaction state
+// transition; the caller must only use the removal helper after it has
+// positively recorded its own successful add. SYNCACTION push packets carry
+// the resulting event but do not include an add/remove discriminator.
 export const REACTION_ACTION_METHOD = 'ACTION'
 export const REWRITE_MESSAGE_METHOD = 'REWRITE'
 
@@ -71,6 +77,18 @@ export async function sendReactionPacket(
   reactionType: number,
 ): Promise<LocoPacket> {
   return connection.sendPacket(REACTION_ACTION_METHOD, buildReactionActionBody(chatId, logId, reactionType))
+}
+
+// Reaction removal is the same verified ACTION wire request. Kakao's
+// reaction control is a toggle, so this helper intentionally shares the
+// packet builder rather than inventing an unverified REMOVEACTION opcode.
+export async function removeReactionPacket(
+  connection: { sendPacket: (method: string, body: Record<string, unknown>) => Promise<LocoPacket> },
+  chatId: Long,
+  logId: Long,
+  reactionType: number,
+): Promise<LocoPacket> {
+  return sendReactionPacket(connection, chatId, logId, reactionType)
 }
 
 export async function rewriteMessagePacket(
@@ -200,6 +218,10 @@ export class LocoSession {
   async addReaction(chatId: Long, logId: Long, reactionType: number): Promise<LocoPacket> {
     if (!this.connection) throw new Error('Not connected')
     return sendReactionPacket(this.connection, chatId, logId, reactionType)
+  }
+  async removeReaction(chatId: Long, logId: Long, reactionType: number): Promise<LocoPacket> {
+    if (!this.connection) throw new Error('Not connected')
+    return removeReactionPacket(this.connection, chatId, logId, reactionType)
   }
 
   async editMessage(chatId: Long, logId: Long, text: string): Promise<LocoPacket> {

@@ -20,6 +20,19 @@ macOS credential extraction approach, and LOGINLIST field schema.
 
 ---
 
+## openkakao-cli reaction probing
+
+- Repository: https://github.com/JungHoonGhae/openkakao-cli
+- Reference commit: d676c9ab390e8be6db9dbcf518aa9d05f85d224c
+- License: MIT
+
+Its March 2026 probe discovered the `ACTION` reaction request and the
+`SYNCACTION` push. The request shape is `{ chatId, logId, type }`, with
+`type=1` the only captured reaction type. The push has no add/remove flag, so
+reaction removal uses the same `ACTION` state-toggle request only when the
+caller owns a confirmed successful add; the SDK does not expose an arbitrary
+idempotent remove operation.
+
 ## loco-wrapper
 
 - Repository: https://github.com/NetRiceCake/loco-wrapper
