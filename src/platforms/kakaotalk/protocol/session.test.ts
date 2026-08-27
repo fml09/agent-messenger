@@ -2,6 +2,7 @@ import { describe, expect, it, mock } from 'bun:test'
 
 import { Long } from 'bson'
 
+import { getLocoDeviceConfig } from './config'
 import {
   buildReactionActionBody,
   buildRewriteMessageBody,
@@ -191,6 +192,23 @@ describe('Kakao mutation packet boundaries', () => {
     expect(sent[0]).toEqual({
       method: REWRITE_MESSAGE_METHOD,
       body: buildRewriteMessageBody(Long.fromString('123'), Long.fromString('456'), 'edited'),
+    })
+  })
+})
+
+describe('KakaoTalk device profiles', () => {
+  it('builds the experimental Android dtype=1 profile without changing the tablet default', () => {
+    expect(getLocoDeviceConfig('android-main')).toEqual({
+      os: 'android',
+      appVersion: '25.9.2',
+      useSub: false,
+      dtype: 1,
+    })
+    expect(getLocoDeviceConfig('tablet')).toEqual({
+      os: 'android',
+      appVersion: '25.9.2',
+      useSub: true,
+      dtype: 2,
     })
   })
 })

@@ -522,7 +522,11 @@ export const authCommand = new Command('auth')
       .option('--email <email>', 'KakaoTalk email address')
       .option('--password <password>', 'KakaoTalk password')
       .option('--password-file <path>', 'Read password from file (deleted after read)')
-      .option('--device-type <type>', 'Device slot: tablet (default, safe) or pc', 'tablet')
+      .option(
+        '--device-type <type>',
+        'Device profile: tablet (default, safe), pc, or android-main (experimental single-device)',
+        'tablet',
+      )
       .option('--force', 'Force login even if device slot is occupied (kicks existing session)')
       .option('--pretty', 'Pretty print JSON output')
       .option('--debug', 'Show debug output')
