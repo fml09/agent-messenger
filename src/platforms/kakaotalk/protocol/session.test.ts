@@ -2,7 +2,17 @@ import { describe, expect, it, mock } from 'bun:test'
 
 import { Long } from 'bson'
 
-import { buildTypingActionBody, sendTypingPacket, TYPING_ACTION_METHOD } from './session'
+import {
+  buildReactionActionBody,
+  buildRewriteMessageBody,
+  buildTypingActionBody,
+  REACTION_ACTION_METHOD,
+  REWRITE_MESSAGE_METHOD,
+  sendReactionPacket,
+  sendTypingPacket,
+  rewriteMessagePacket,
+  TYPING_ACTION_METHOD,
+} from './session'
 import type { LocoPacket } from './types'
 
 type SentPacket = { method: string; body: Record<string, unknown> }
@@ -109,5 +119,63 @@ describe('sendTypingPacket → sendPacket wire boundary', () => {
     const packet = sent[0]!
     expect(packet.method).toBe(TYPING_ACTION_METHOD)
     expect(packet.body).toEqual(buildTypingActionBody(Long.fromString('123'), Long.fromString('456')))
+  })
+})
+
+describe('Kakao mutation wire contracts', () => {
+  it('builds the ACTION reaction body with the target logId and type', () => {
+    const body = buildReactionActionBody(Long.fromString('459750513901477'), Long.fromString('280368495100000'), 1)
+
+    expect((body.chatId as Long).toString()).toBe('459750513901477')
+    expect((body.logId as Long).toString()).toBe('280368495100000')
+    expect(body.type).toBe(1)
+    expect(Object.keys(body).sort()).toEqual(['chatId', 'logId', 'type'])
+  })
+
+  it('rejects invalid reaction types before they reach the wire', () => {
+    expect(() => buildReactionActionBody(Long.fromString('123'), Long.fromString('456'), 0)).toThrow(
+      'reactionType must be a positive integer',
+    )
+    expect(() => buildReactionActionBody(Long.fromString('123'), Long.fromString('456'), 1.5)).toThrow(
+      'reactionType must be a positive integer',
+    )
+  })
+
+  it('builds the REWRITE body with Kakao text type and replacement message', () => {
+    const body = buildRewriteMessageBody(Long.fromString('123'), Long.fromString('456'), 'edited')
+
+    expect((body.chatId as Long).toString()).toBe('123')
+    expect((body.logId as Long).toString()).toBe('456')
+    expect(body).toEqual({ chatId: body.chatId, logId: body.logId, msg: 'edited', type: 1 })
+  })
+})
+
+describe('Kakao mutation packet boundaries', () => {
+  it('sends ACTION reactions and propagates the LocoPacket', async () => {
+    const expected = { statusCode: 0, body: { status: 0 } }
+    const { connection, sent } = fakeConnection(expected)
+
+    const result = await sendReactionPacket(connection, Long.fromString('123'), Long.fromString('456'), 1)
+
+    expect(result).toBe(expected)
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).toEqual({
+      method: REACTION_ACTION_METHOD,
+      body: buildReactionActionBody(Long.fromString('123'), Long.fromString('456'), 1),
+    })
+  })
+
+  it('sends REWRITE messages and propagates the LocoPacket', async () => {
+    const expected = { statusCode: 0, body: { status: 0 } }
+    const { connection, sent } = fakeConnection(expected)
+
+    const result = await rewriteMessagePacket(connection, Long.fromString('123'), Long.fromString('456'), 'edited')
+
+    expect(result).toBe(expected)
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).toEqual({
+      method: REWRITE_MESSAGE_METHOD,
+      body: buildRewriteMessageBody(Long.fromString('123'), Long.fromString('456'), 'edited'),
+    })
   })
 })
