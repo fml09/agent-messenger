@@ -137,6 +137,27 @@ export interface KakaoSendResult {
   sent_at: number
 }
 
+export interface KakaoEditResult {
+  success: boolean
+  status_code: number
+  chat_id: string
+  log_id: string
+  message: string
+}
+
+export type KakaoEditExtra = string | Record<string, unknown> | unknown[]
+
+export interface KakaoEditOptions {
+  type?: number
+  extra?: KakaoEditExtra
+  supplement?: string
+}
+
+export type KakaoEditTarget =
+  | string
+  | { log_id: string; type?: number; attachment?: Record<string, unknown> | null; extra?: KakaoEditExtra }
+  | { logId: string; type?: number; attachment?: Record<string, unknown> | null; extra?: KakaoEditExtra }
+
 // LOCO message_type values. Source: KakaoTalk APK 26.4.2 + typeclaw inbound parser.
 export const KAKAO_MESSAGE_TYPE = {
   TEXT: 1,
@@ -290,6 +311,14 @@ export const KakaoMemberSnapshotSchema = z.object({
   members: z.array(KakaoMemberSchema),
   complete: z.literal(true),
   consistency_basis: z.literal('stable_double_read_chatinfo_getmem'),
+})
+
+export const KakaoEditResultSchema = z.object({
+  success: z.boolean(),
+  status_code: z.number(),
+  chat_id: z.string(),
+  log_id: z.string(),
+  message: z.string(),
 })
 
 export const KakaoSendResultSchema = z.object({

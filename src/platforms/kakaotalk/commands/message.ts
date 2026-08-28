@@ -44,6 +44,23 @@ async function sendAction(
   }
 }
 
+export async function editAction(
+  chatId: string,
+  logId: string,
+  text: string,
+  options: { account?: string; pretty?: boolean },
+): Promise<void> {
+  try {
+    const result = await withKakaoClient(options, (client) => client.editMessage(chatId, logId, text))
+    console.log(formatOutput(result, options.pretty))
+    if (!result.success) {
+      process.exit(1)
+    }
+  } catch (error) {
+    handleError(error as Error)
+  }
+}
+
 // A reply attachment needs the source message's author, text, and type — not
 // just its log_id — so we look it up in the chat's recent history.
 async function resolveReplyTarget(
@@ -156,6 +173,17 @@ export const messageCommand = new Command('message')
       .option('--pretty', 'Pretty print JSON output')
       .action(sendAction),
   )
+  .addCommand(
+    new Command('edit')
+      .description('Edit a text message by log ID')
+      .argument('<chat-id>', 'Chat room ID')
+      .argument('<log-id>', 'Message log ID')
+      .argument('<text>', 'New message text')
+      .option('--account <id>', 'Use a specific KakaoTalk account')
+      .option('--pretty', 'Pretty print JSON output')
+      .action(editAction),
+  )
+
   .addCommand(
     new Command('upload')
       .description(

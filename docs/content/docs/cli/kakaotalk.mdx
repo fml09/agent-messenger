@@ -207,6 +207,10 @@ agent-kakaotalk message list <chat-id> --pretty
 agent-kakaotalk message send <chat-id> "Hello world"
 agent-kakaotalk message send <chat-id> "Hello world" --pretty
 
+# Edit one of your text messages by its log ID
+agent-kakaotalk message edit <chat-id> <log-id> "Updated text"
+agent-kakaotalk message edit <chat-id> <log-id> "Updated text" --pretty
+
 # Send a file (auto-routes by MIME: photo / video / audio / generic file)
 agent-kakaotalk message upload <chat-id> ./photo.jpg
 agent-kakaotalk message upload <chat-id> ./clip.mp4
@@ -228,6 +232,25 @@ agent-kakaotalk message mark-read <chat-id> <log-id> --link-id <li>   # open cha
 agent-kakaotalk message list <chat-id> --account <account-id>
 agent-kakaotalk message send <chat-id> "Hello" --account <account-id>
 agent-kakaotalk message upload <chat-id> ./photo.jpg --account <account-id>
+agent-kakaotalk message edit <chat-id> <log-id> "Updated text" --account <account-id>
+```
+
+#### Editing Messages
+
+`message edit` sends `MODIFYMSG` for an existing message. KakaoTalk only
+allows edits that the account is permitted to make, and the `<log-id>` must be
+the target message's numeric `log_id` from `message list`.
+
+Output (JSON by default; `--pretty` pretty-prints the same JSON):
+
+```json
+{
+  "success": true,
+  "status_code": 0,
+  "chat_id": "9876543210",
+  "log_id": "3846830417126748160",
+  "message": "Updated text"
+}
 ```
 
 #### Sending Attachments

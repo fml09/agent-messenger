@@ -48,6 +48,35 @@ export async function sendTypingPacket(
   return connection.sendPacket(TYPING_ACTION_METHOD, buildTypingActionBody(chatId, linkId))
 }
 
+export const EDIT_MESSAGE_METHOD = 'MODIFYMSG'
+
+export function buildEditMessageBody(
+  chatId: Long,
+  logId: Long,
+  text: string,
+  options: { type?: number; extra?: string; supplement?: string } = {},
+): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    chatId,
+    logId,
+    msg: text,
+    type: options.type ?? KAKAO_MESSAGE_TYPE.TEXT,
+  }
+  if (options.extra !== undefined) body.extra = options.extra
+  if (options.supplement !== undefined) body.supplement = options.supplement
+  return body
+}
+
+export async function editMessagePacket(
+  connection: { sendPacket: (method: string, body: Record<string, unknown>) => Promise<LocoPacket> },
+  chatId: Long,
+  logId: Long,
+  text: string,
+  options: { type?: number; extra?: string; supplement?: string } = {},
+): Promise<LocoPacket> {
+  return connection.sendPacket(EDIT_MESSAGE_METHOD, buildEditMessageBody(chatId, logId, text, options))
+}
+
 export class LocoSession {
   private connection: LocoConnection | null = null
   private pingTimer: ReturnType<typeof setInterval> | null = null
@@ -162,6 +191,20 @@ export class LocoSession {
       type: 1,
       noSeen: false,
     })
+  }
+  /**
+   * Modify an existing chat message through the LOCO `MODIFYMSG` command.
+   * KakaoTalk identifies the target by its chat ID and log ID; `extra` and
+   * `supplement` are optional payloads used by non-text message types.
+   */
+  async editMessage(
+    chatId: Long,
+    logId: Long,
+    text: string,
+    options: { type?: number; extra?: string; supplement?: string } = {},
+  ): Promise<LocoPacket> {
+    if (!this.connection) throw new Error('Not connected')
+    return editMessagePacket(this.connection, chatId, logId, text, options)
   }
 
   // Quoted reply — a WRITE with message_type 26 (REPLY) whose `extra` JSON
