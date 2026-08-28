@@ -47,36 +47,6 @@ export async function sendTypingPacket(
   return connection.sendPacket(TYPING_ACTION_METHOD, buildTypingActionBody(chatId, linkId))
 }
 
-// `ACTION` is also the verified LOCO command for reaction state changes.
-// Removal is a toggle of the same request; callers must only remove a
-// reaction they recorded as successfully added.
-export const REACTION_ACTION_METHOD = 'ACTION'
-
-export function buildReactionActionBody(chatId: Long, logId: Long, reactionType: number): Record<string, unknown> {
-  if (!Number.isInteger(reactionType) || reactionType <= 0) {
-    throw new Error(`reactionType must be a positive integer, got ${String(reactionType)}`)
-  }
-  return { chatId, logId, type: reactionType }
-}
-
-export async function sendReactionPacket(
-  connection: { sendPacket: (method: string, body: Record<string, unknown>) => Promise<LocoPacket> },
-  chatId: Long,
-  logId: Long,
-  reactionType: number,
-): Promise<LocoPacket> {
-  return connection.sendPacket(REACTION_ACTION_METHOD, buildReactionActionBody(chatId, logId, reactionType))
-}
-
-export async function removeReactionPacket(
-  connection: { sendPacket: (method: string, body: Record<string, unknown>) => Promise<LocoPacket> },
-  chatId: Long,
-  logId: Long,
-  reactionType: number,
-): Promise<LocoPacket> {
-  return sendReactionPacket(connection, chatId, logId, reactionType)
-}
-
 export const EDIT_MESSAGE_METHOD = 'MODIFYMSG'
 
 export function buildEditMessageBody(
@@ -223,15 +193,6 @@ export class LocoSession {
     })
   }
 
-  async addReaction(chatId: Long, logId: Long, reactionType: number): Promise<LocoPacket> {
-    if (!this.connection) throw new Error('Not connected')
-    return sendReactionPacket(this.connection, chatId, logId, reactionType)
-  }
-
-  async removeReaction(chatId: Long, logId: Long, reactionType: number): Promise<LocoPacket> {
-    if (!this.connection) throw new Error('Not connected')
-    return removeReactionPacket(this.connection, chatId, logId, reactionType)
-  }
   /**
    * Modify an existing chat message through the LOCO `MODIFYMSG` command.
    * KakaoTalk identifies the target by its chat ID and log ID; `extra` and

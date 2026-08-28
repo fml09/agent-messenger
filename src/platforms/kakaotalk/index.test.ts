@@ -9,6 +9,7 @@ import {
   KakaoCredentialManager,
   KakaoChatSchema,
   KakaoConfigSchema,
+  KakaoReactionResultSchema,
   KakaoLeaveChatResultSchema,
   KakaoEditResultSchema,
   KakaoMessagePageSchema,
@@ -64,6 +65,21 @@ it('KakaoSendResultSchema is exported from barrel', () => {
 
 it('KakaoEditResultSchema is exported from barrel', () => {
   expect(typeof KakaoEditResultSchema.parse).toBe('function')
+})
+
+it('exports the expanded reaction result contract from the barrel', () => {
+  expect(typeof KakaoReactionResultSchema.parse).toBe('function')
+  expect(
+    KakaoReactionResultSchema.parse({
+      success: true,
+      status_code: 200,
+      chat_id: '100',
+      log_id: '42',
+      reaction_id: '1200282_026',
+      action: 'add',
+      revision: '7',
+    }).reaction_id,
+  ).toBe('1200282_026')
 })
 
 it('KakaoAccountCredentialsSchema is exported from barrel', () => {

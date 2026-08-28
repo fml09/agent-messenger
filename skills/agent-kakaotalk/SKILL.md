@@ -687,6 +687,14 @@ try {
   const chatId = chats[0].chat_id
   const result = await client.sendMessage(chatId, 'Hello from SDK!')
 
+  // Search the catalog and use the returned reactionId
+  const reactions = await client.searchReactions('엄지척')
+  const reaction = reactions[0]
+  if (reaction) {
+    await client.addReaction(chatId, result.log_id, reaction.o)
+    await client.removeReaction(chatId, result.log_id, reaction.o)
+  }
+
   // Edit the text message by its returned log_id
   await client.editMessage(chatId, result.log_id, 'Updated text')
 
@@ -718,7 +726,7 @@ See the [KakaoTalk SDK documentation](https://agent-messenger.dev/docs/sdk/kakao
 - Auto-extraction of email/password from the desktop app is **macOS and Windows only** (KakaoTalk desktop is not available on Linux). Linux users must pass `--email` and `--password` (or `--password-file`) explicitly — the LOCO protocol, login flow, and all messaging features work on Linux.
 - No chat room creation
 - No friend list management
-- No reactions or emoji
+- No reaction or emoji CLI command (message reactions are SDK-only)
 - No open chat (오픈채팅) browsing or joining
 - No search across chats
 - Stickers / emoticons cannot be sent (inbound stickers expose pack/path metadata, but the sticker store requires desktop-app purchase flows the SDK does not replicate). Photos, videos, audio, and arbitrary files can both be received and sent — see [`message upload`](#message-commands) and [`KakaoTalkClient.sendAttachment`](#sdk-programmatic-usage).

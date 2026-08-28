@@ -162,6 +162,45 @@ const result = await client.sendMessage('9876543210', 'Hello from SDK!')
 // → KakaoSendResult { success, status_code, chat_id, log_id, sent_at }
 ```
 
+### Reactions
+
+```typescript
+const target = (await client.getMessages('9876543210'))[0]
+if (target) {
+  // Search the current KakaoTalk reaction catalog instead of guessing a
+  // numeric reaction type.
+  const candidates = await client.searchReactions('엄지척')
+  const reaction = candidates[0]
+  if (!reaction) throw new Error('Reaction not found')
+
+  await client.addReaction('9876543210', target.log_id, reaction.o)
+  await client.removeReaction('9876543210', target.log_id, reaction.o)
+}
+```
+
+`searchReactions(query)` calls KakaoTalk's authenticated reaction catalog
+endpoint and returns catalog entries whose `o` field is the `reactionId` used
+by `addReaction()` and `removeReaction()`. The current KakaoTalk client exposes
+up to 114 catalog reactions; the available set can vary by account, app
+version, and entitlement.
+
+For OpenChat, pass the `linkId` in the options object:
+
+```typescript
+await client.addReaction('9876543210', target.log_id, reaction.o, { linkId: '77777' })
+```
+
+To inspect which users used each reaction on a message:
+
+```typescript
+const members = await client.getReactionMembers('9876543210', target.log_id)
+// → [{ reactionId: '1200282_026', userIds: ['...'] }]
+```
+
+The reaction endpoints are private KakaoTalk APIs, not Kakao Developers APIs.
+They may change without notice and should be exercised only with an account
+you control.
+
 ### Editing
 
 ```typescript

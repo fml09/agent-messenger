@@ -140,18 +140,47 @@ export interface KakaoSendResult {
   sent_at: number
 }
 
-// Only the like reaction is currently exposed; the server-side Android
-// reaction path remains unverified, so do not widen this constant speculatively.
-export const KAKAO_REACTION_TYPE = {
-  LIKE: 1,
-} as const
+export type KakaoReactionId = string | number
+
+export interface KakaoReactionTargetObject {
+  log_id?: KakaoReactionId
+  logId?: KakaoReactionId
+  linkId?: KakaoReactionId
+  isOpenChat?: boolean
+  room?: {
+    openLinkId?: KakaoReactionId
+    isOpenChat?: boolean
+  }
+}
+
+export type KakaoReactionTarget = KakaoReactionId | KakaoReactionTargetObject
+
+export interface KakaoReactionOptions {
+  linkId?: KakaoReactionId
+}
 
 export interface KakaoReactionResult {
   success: boolean
   status_code: number
   chat_id: string
   log_id: string
-  reaction_type: number
+  reaction_id: string
+  action: 'add' | 'remove'
+  revision: string | null
+}
+
+export interface KakaoReactionCatalogItem {
+  mTagIds?: number[]
+  k?: number
+  o: string
+  a?: Record<string, string>
+  productTier?: string
+  [key: string]: unknown
+}
+
+export interface KakaoReactionMemberGroup {
+  reactionId: string
+  userIds: string[]
 }
 
 export interface KakaoEditResult {
@@ -343,7 +372,9 @@ export const KakaoReactionResultSchema = z.object({
   status_code: z.number(),
   chat_id: z.string(),
   log_id: z.string(),
-  reaction_type: z.number().int().positive(),
+  reaction_id: z.string(),
+  action: z.enum(['add', 'remove']),
+  revision: z.string().nullable(),
 })
 
 export const KakaoSendResultSchema = z.object({
