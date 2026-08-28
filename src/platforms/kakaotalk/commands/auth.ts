@@ -320,8 +320,7 @@ async function loginAction(options: KakaoAuthOptions): Promise<void> {
       existing?.auth_method === 'login' && existing.device_type === requestedDeviceType
         ? existing.device_uuid
         : undefined
-    const savedDeviceUuid =
-      pendingState?.device_type === requestedDeviceType ? pendingState.device_uuid : existingUuid
+    const savedDeviceUuid = pendingState?.device_type === requestedDeviceType ? pendingState.device_uuid : existingUuid
 
     const onPasscodeDisplay = (code: string) => {
       if (interactive) {
