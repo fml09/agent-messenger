@@ -117,7 +117,7 @@ export class LocoSession {
         prtVer: PROTOCOL_VERSION,
         os: deviceConfig.os,
         lang: LANG,
-        dtype: DTYPE,
+        dtype: deviceConfig.dtype,
         duuid: deviceUuid,
         oauthToken,
         ntype: 0,

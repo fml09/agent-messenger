@@ -42,11 +42,17 @@ export interface LocoDeviceConfig {
   os: string
   appVersion: string
   useSub: boolean
+  dtype: number
 }
 
 export function getLocoDeviceConfig(deviceType: KakaoDeviceType): LocoDeviceConfig {
-  if (deviceType === 'tablet') {
-    return { os: ANDROID_OS, appVersion: ANDROID_APP_VERSION, useSub: true }
+  if (deviceType === 'android-main') {
+    // Experimental Android main-device probe. Keep the profile explicit at
+    // both CHECKIN (useSub) and LOGINLIST (dtype) boundaries.
+    return { os: ANDROID_OS, appVersion: ANDROID_APP_VERSION, useSub: false, dtype: 1 }
   }
-  return { os: PC_OS, appVersion: PC_APP_VERSION, useSub: false }
+  if (deviceType === 'tablet') {
+    return { os: ANDROID_OS, appVersion: ANDROID_APP_VERSION, useSub: true, dtype: DTYPE }
+  }
+  return { os: PC_OS, appVersion: PC_APP_VERSION, useSub: false, dtype: DTYPE }
 }

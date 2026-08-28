@@ -76,6 +76,27 @@ agent-kakaotalk auth login --device-type pc
 agent-kakaotalk auth login --device-type tablet --force
 ```
 
+### Experimental Android-main profile
+
+`android-main` is an opt-in probe for the Android main-device profile
+(`dtype=1`). It is not the default and is intended only for an isolated test
+account. The CLI generates a new device UUID when the stored account belongs
+to another profile, so an existing tablet credential is not silently reused.
+
+```bash
+# First login: prompts for the KakaoTalk password and phone confirmation
+agent-kakaotalk auth login --device-type android-main
+
+# Only if Kakao reports the main-device slot is occupied; this can disconnect
+# the existing main-device session.
+agent-kakaotalk auth login --device-type android-main --force
+```
+
+After login, confirm `device_type: "android-main"` with
+`agent-kakaotalk auth status`. A successful login proves only that the profile
+can authenticate; message editing still requires a separate `MODIFYMSG` smoke
+test.
+
 ### Auth Management
 
 ```bash
@@ -349,7 +370,6 @@ Output includes:
 - No chat room creation
 - No friend list management
 - No reactions or emoji
-- No message editing or deletion
 - No open chat browsing or joining
 - No search across chats
 

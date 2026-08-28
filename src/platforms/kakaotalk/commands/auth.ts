@@ -12,6 +12,14 @@ import { CredentialManager } from '../credential-manager'
 import { KakaoTokenExtractor } from '../token-extractor'
 import { KAKAO_NEXT_ACTIONS, type KakaoAuthOptions, type KakaoDeviceType, type KakaoLoginResult } from '../types'
 
+function normalizeDeviceType(value: string | undefined): KakaoDeviceType {
+  const deviceType = value ?? 'tablet'
+  if (deviceType === 'tablet' || deviceType === 'pc' || deviceType === 'android-main') {
+    return deviceType
+  }
+  throw new Error(`Unknown KakaoTalk device profile "${deviceType}". Use tablet, pc, or android-main.`)
+}
+
 async function promptPasswordGUI(email?: string): Promise<string | undefined> {
   const { execSync } = require('node:child_process') as typeof import('node:child_process')
 
@@ -220,6 +228,7 @@ async function loginAction(options: KakaoAuthOptions): Promise<void> {
     const interactive = isInteractive()
 
     let { email, password, deviceType, force } = options
+    const requestedDeviceType = normalizeDeviceType(deviceType)
 
     if (!password && options.passwordFile) {
       const { readFileSync, unlinkSync } = await import('node:fs')
@@ -305,8 +314,14 @@ async function loginAction(options: KakaoAuthOptions): Promise<void> {
 
     const existing = await credManager.getAccount()
     const pendingState = await credManager.loadPendingLogin()
-    const existingUuid = existing?.auth_method === 'login' ? existing?.device_uuid : undefined
-    const savedDeviceUuid = pendingState?.device_uuid ?? existingUuid
+    // A device UUID is tied to the Kakao device slot/profile. Do not reuse a
+    // tablet UUID for the experimental android-main login.
+    const existingUuid =
+      existing?.auth_method === 'login' && existing.device_type === requestedDeviceType
+        ? existing.device_uuid
+        : undefined
+    const savedDeviceUuid =
+      pendingState?.device_type === requestedDeviceType ? pendingState.device_uuid : existingUuid
 
     const onPasscodeDisplay = (code: string) => {
       if (interactive) {
@@ -322,7 +337,7 @@ async function loginAction(options: KakaoAuthOptions): Promise<void> {
     const result = await loginFlow({
       email,
       password,
-      deviceType: deviceType ?? 'tablet',
+      deviceType: requestedDeviceType,
       force: force ?? false,
       savedDeviceUuid,
       onPasscodeDisplay,
@@ -364,7 +379,7 @@ async function loginAction(options: KakaoAuthOptions): Promise<void> {
         password,
         deviceType: chosenType,
         force: true,
-        savedDeviceUuid: chosenType === (deviceType ?? 'tablet') ? savedDeviceUuid : undefined,
+        savedDeviceUuid: chosenType === requestedDeviceType ? savedDeviceUuid : undefined,
         onPasscodeDisplay,
         debugLog,
       })
@@ -522,7 +537,11 @@ export const authCommand = new Command('auth')
       .option('--email <email>', 'KakaoTalk email address')
       .option('--password <password>', 'KakaoTalk password')
       .option('--password-file <path>', 'Read password from file (deleted after read)')
-      .option('--device-type <type>', 'Device slot: tablet (default, safe) or pc', 'tablet')
+      .option(
+        '--device-type <type>',
+        'Device profile: tablet (default, safe), pc, or android-main (experimental single-device)',
+        'tablet',
+      )
       .option('--force', 'Force login even if device slot is occupied (kicks existing session)')
       .option('--pretty', 'Pretty print JSON output')
       .option('--debug', 'Show debug output')

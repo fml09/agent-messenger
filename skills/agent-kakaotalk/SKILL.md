@@ -129,6 +129,24 @@ agent-kakaotalk auth login --device-type pc
 agent-kakaotalk auth login --device-type tablet --force
 ```
 
+### Experimental Android-main profile
+
+`android-main` is an opt-in Android main-device probe that sends `dtype=1`
+in `LOGINLIST` and uses main-device `CHECKIN` semantics. It is not the default
+and must be used only with an isolated test account.
+
+```bash
+# First login: use a fresh Android-main device UUID and confirm on the phone
+agent-kakaotalk auth login --device-type android-main
+
+# Use --force only when Kakao reports that the main-device slot is occupied
+agent-kakaotalk auth login --device-type android-main --force
+```
+
+When switching from an existing tablet account, the CLI does not reuse that
+tablet UUID. Confirm the result with `agent-kakaotalk auth status`; it should
+report `device_type: "android-main"`.
+
 ## Multi-Account
 
 KakaoTalk supports multiple accounts. Each login stores credentials separately, keyed by user ID.
@@ -701,7 +719,6 @@ See the [KakaoTalk SDK documentation](https://agent-messenger.dev/docs/sdk/kakao
 - No chat room creation
 - No friend list management
 - No reactions or emoji
-- No message editing or deletion
 - No open chat (오픈채팅) browsing or joining
 - No search across chats
 - Stickers / emoticons cannot be sent (inbound stickers expose pack/path metadata, but the sticker store requires desktop-app purchase flows the SDK does not replicate). Photos, videos, audio, and arbitrary files can both be received and sent — see [`message upload`](#message-commands) and [`KakaoTalkClient.sendAttachment`](#sdk-programmatic-usage).

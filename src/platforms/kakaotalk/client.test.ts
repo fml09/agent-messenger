@@ -1646,12 +1646,12 @@ describe('KakaoTalkClient', () => {
         { toString(): string },
         { toString(): string },
         string,
-        { type: number; extra: string; supplement?: string },
+        { type: number; extra?: string; supplement?: string },
       ]
       expect(chatIdArg.toString()).toBe('100')
       expect(logIdArg.toString()).toBe('42')
       expect(textArg).toBe('edited text')
-      expect(optionsArg).toEqual({ type: 1, extra: '{}', supplement: undefined })
+      expect(optionsArg).toEqual({ type: 1 })
       expect(result).toEqual({
         success: true,
         status_code: 0,

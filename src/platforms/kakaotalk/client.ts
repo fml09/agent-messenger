@@ -1353,22 +1353,21 @@ export class KakaoTalkClient {
     const parsedChatId = parseChatId(chatId)
     const parsedLogId = parseLogId(normalized.logId)
 
-    let extra: string
+    let extra: string | undefined
     try {
-      extra = encodeEditExtra(options?.extra) ?? normalized.extra ?? '{}'
+      extra = encodeEditExtra(options?.extra) ?? normalized.extra
     } catch (cause) {
       throw new KakaoTalkError('Invalid edit message extra', 'invalid_edit_extra', { cause })
     }
 
     const type = typeof options?.type === 'number' ? options.type : (normalized.type ?? KAKAO_MESSAGE_TYPE.TEXT)
+    const editOptions: { type: number; extra?: string; supplement?: string } = { type }
+    if (extra !== undefined) editOptions.extra = extra
+    if (options?.supplement !== undefined) editOptions.supplement = options.supplement
 
     return this.executeWithReconnect(async ({ session }) => {
       try {
-        const response = await session.editMessage(parsedChatId, parsedLogId, text, {
-          type,
-          extra,
-          supplement: options?.supplement,
-        })
+        const response = await session.editMessage(parsedChatId, parsedLogId, text, editOptions)
         if (response.statusCode !== 0) {
           throw new Error(`MODIFYMSG failed: statusCode=${response.statusCode}`)
         }

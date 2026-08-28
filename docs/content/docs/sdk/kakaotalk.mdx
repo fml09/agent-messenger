@@ -32,6 +32,24 @@ import { KakaoTalkClient } from 'agent-messenger/kakaotalk'
 const client = await new KakaoTalkClient().login()
 ```
 
+### Device profiles
+
+`tablet` is the default Android sub-device profile. `android-main` is an
+explicit experimental profile that sends `dtype=1` and must be limited to an
+isolated test account:
+
+```typescript
+const client = await new KakaoTalkClient().login({
+  oauthToken,
+  userId,
+  deviceUuid,
+  deviceType: 'android-main',
+})
+```
+
+The profile does not make message editing universally available; KakaoTalk
+still decides whether the account and message satisfy its edit restrictions.
+
 ### Login errors
 
 The first operation opens the LOCO session lazily. If Kakao rejects `LOGINLIST`, `KakaoTalkError` preserves a typed code and safe numeric server status:

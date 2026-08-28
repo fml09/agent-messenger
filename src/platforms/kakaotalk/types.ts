@@ -31,7 +31,9 @@ export interface KakaoConfig {
   accounts: Record<string, KakaoAccountCredentials>
 }
 
-export type KakaoDeviceType = 'pc' | 'tablet'
+// Explicit experimental profile for probing the Android main-device slot.
+// The safer `tablet` sub-device profile remains the default.
+export type KakaoDeviceType = 'pc' | 'tablet' | 'android-main'
 
 export interface KakaoAuthOptions {
   email?: string
@@ -66,7 +68,8 @@ export const KAKAO_NEXT_ACTIONS: Record<string, { next_action: string; message: 
   },
   choose_device: {
     next_action: 'choose_device',
-    message: 'Tablet slot occupied. Provide --device-type pc or --device-type tablet with --force to replace.',
+    message:
+      'Tablet slot occupied. Use --device-type pc or --device-type tablet with --force; android-main is experimental and single-device.',
   },
 }
 
@@ -384,7 +387,7 @@ export const KakaoAccountCredentialsSchema = z.object({
   user_id: z.string(),
   refresh_token: z.string().optional(),
   device_uuid: z.string(),
-  device_type: z.enum(['pc', 'tablet']),
+  device_type: z.enum(['pc', 'tablet', 'android-main']),
   auth_method: z.enum(['login', 'extract']).optional(),
   created_at: z.string(),
   updated_at: z.string(),
