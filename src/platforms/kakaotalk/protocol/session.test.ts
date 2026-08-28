@@ -2,7 +2,14 @@ import { describe, expect, it, mock } from 'bun:test'
 
 import { Long } from 'bson'
 
-import { buildTypingActionBody, sendTypingPacket, TYPING_ACTION_METHOD } from './session'
+import {
+  buildEditMessageBody,
+  buildTypingActionBody,
+  editMessagePacket,
+  EDIT_MESSAGE_METHOD,
+  sendTypingPacket,
+  TYPING_ACTION_METHOD,
+} from './session'
 import type { LocoPacket } from './types'
 
 type SentPacket = { method: string; body: Record<string, unknown> }
@@ -109,5 +116,54 @@ describe('sendTypingPacket → sendPacket wire boundary', () => {
     const packet = sent[0]!
     expect(packet.method).toBe(TYPING_ACTION_METHOD)
     expect(packet.body).toEqual(buildTypingActionBody(Long.fromString('123'), Long.fromString('456')))
+  })
+})
+describe('message edit wire contract', () => {
+  it('uses the MODIFYMSG opcode', () => {
+    expect(EDIT_MESSAGE_METHOD).toBe('MODIFYMSG')
+  })
+
+  it('builds the default text edit body without unrelated fields', () => {
+    const body = buildEditMessageBody(Long.fromString('459750513901477'), Long.fromString('280368495100000'), 'edited')
+
+    expect((body.chatId as Long).toString()).toBe('459750513901477')
+    expect((body.logId as Long).toString()).toBe('280368495100000')
+    expect(body.msg).toBe('edited')
+    expect(body.type).toBe(1)
+    expect(Object.keys(body).sort()).toEqual(['chatId', 'logId', 'msg', 'type'])
+  })
+
+  it('includes extra and supplement when provided', () => {
+    const body = buildEditMessageBody(Long.fromString('123'), Long.fromString('456'), 'caption', {
+      type: 2,
+      extra: '{"k":"photo-key"}',
+      supplement: 'supplement',
+    })
+
+    expect(body).toEqual({
+      chatId: Long.fromString('123'),
+      logId: Long.fromString('456'),
+      msg: 'caption',
+      type: 2,
+      extra: '{"k":"photo-key"}',
+      supplement: 'supplement',
+    })
+  })
+})
+
+describe('editMessagePacket → sendPacket wire boundary', () => {
+  it('sends the exact edit body and propagates the response', async () => {
+    const expected = { statusCode: 0, body: { status: 0 } }
+    const { connection, sent, sendPacketMock } = fakeConnection(expected)
+
+    const result = await editMessagePacket(connection, Long.fromString('123'), Long.fromString('456'), 'new text')
+
+    expect(sendPacketMock).toHaveBeenCalledTimes(1)
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).toEqual({
+      method: EDIT_MESSAGE_METHOD,
+      body: buildEditMessageBody(Long.fromString('123'), Long.fromString('456'), 'new text'),
+    })
+    expect(result).toBe(expected)
   })
 })

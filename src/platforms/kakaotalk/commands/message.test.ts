@@ -11,6 +11,9 @@ const mockGetMessages = mock(() =>
 )
 
 const mockSendMessage = mock(() => Promise.resolve({ log_id: '2', message: 'Hi there', created_at: 2000 }))
+const mockEditMessage = mock(() =>
+  Promise.resolve({ success: true, status_code: 0, chat_id: 'chat-123', log_id: '42', message: 'Edited text' }),
+)
 
 const mockMarkRead = mock(() =>
   Promise.resolve({ success: true, status_code: 0, chat_id: 'chat-123', watermark: '42' }),
@@ -20,6 +23,7 @@ const originalExit = process.exit
 
 const mockClient = {
   getMessages: mockGetMessages,
+  editMessage: mockEditMessage,
   sendMessage: mockSendMessage,
   markRead: mockMarkRead,
 }
@@ -36,6 +40,7 @@ describe('message commands', () => {
   beforeEach(() => {
     mockWithKakaoClient.mockReset()
     mockGetMessages.mockReset()
+    mockEditMessage.mockReset()
     mockSendMessage.mockReset()
     mockMarkRead.mockReset()
 
@@ -44,6 +49,9 @@ describe('message commands', () => {
     })
     mockGetMessages.mockImplementation(() =>
       Promise.resolve([{ log_id: '1', message: 'Hello', sender_id: 'user-1', created_at: 1000 }]),
+    )
+    mockEditMessage.mockImplementation(() =>
+      Promise.resolve({ success: true, status_code: 0, chat_id: 'chat-123', log_id: '42', message: 'Edited text' }),
     )
     mockSendMessage.mockImplementation(() => Promise.resolve({ log_id: '2', message: 'Hi there', created_at: 2000 }))
     mockMarkRead.mockImplementation(() =>
@@ -153,6 +161,58 @@ describe('message commands', () => {
 
       expect(mockSendMessage).not.toHaveBeenCalled()
       expect(exitSpy).toHaveBeenCalled()
+    })
+  })
+
+  describe('edit', () => {
+    it('edits a message by log ID and prints the normalized result', async () => {
+      await messageCommand.parseAsync(['edit', 'chat-123', '42', 'Edited text'], { from: 'user' })
+
+      expect(mockEditMessage).toHaveBeenCalledWith('chat-123', '42', 'Edited text')
+      expect(JSON.parse(consoleLogSpy.mock.calls[0][0])).toEqual({
+        success: true,
+        status_code: 0,
+        chat_id: 'chat-123',
+        log_id: '42',
+        message: 'Edited text',
+      })
+    })
+
+    it('passes account and pretty options through the command wrapper', async () => {
+      await messageCommand.parseAsync(
+        ['edit', 'chat-123', '42', 'Edited text', '--account', 'my-account', '--pretty'],
+        { from: 'user' },
+      )
+
+      expect(mockWithKakaoClient).toHaveBeenCalledWith(
+        expect.objectContaining({ account: 'my-account', pretty: true }),
+        expect.any(Function),
+      )
+      expect(consoleLogSpy.mock.calls[0][0]).toContain('\n')
+    })
+
+    it('exits non-zero when the server rejects the edit', async () => {
+      mockEditMessage.mockImplementationOnce(() =>
+        Promise.resolve({
+          success: false,
+          status_code: -500,
+          chat_id: 'chat-123',
+          log_id: '42',
+          message: 'Edited text',
+        }),
+      )
+      const exitSpy = mock((_code?: number): never => {
+        throw new Error('process.exit called')
+      })
+      process.exit = exitSpy as unknown as typeof process.exit
+
+      try {
+        await messageCommand.parseAsync(['edit', 'chat-123', '42', 'Edited text'], { from: 'user' })
+      } catch {
+        // process.exit stub throws to abort the action
+      }
+
+      expect(exitSpy).toHaveBeenCalledWith(1)
     })
   })
 

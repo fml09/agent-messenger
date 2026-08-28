@@ -493,7 +493,7 @@ See the [TUI docs](https://agent-messenger.dev/docs/tui) for keybindings, archit
 | Send & list messages       |  ✅   |   ✅    |  ✅   |  ✅   |    ✅     |    ✅     |  ✅   |   —    |    ✅     |    ✅     |         ✅          |
 | Direct messages            |  ✅   |   ✅    |  ✅   |  ✅   |    ✅     |    ✅     |  ✅   |   ✅    |    ✅     |    ✅     |         ✅          |
 | Search messages            |  ✅   |   ✅    |   —   |   —   |    —     |    ✅     |   —   |   —    |    ✅     |    —      |         ✅          |
-| Message edit               |  ✅   |   ✅    |  ✅¹  |  ✅   |    —     |    —     |   —   |   —    |     —     |    —      |         —           |
+| Message edit               |  ✅   |   ✅   |  ✅¹  |  ✅   |    —    |    —     |   —   |   —    |     —     |    ✅      |         —           |
 | Threads                    |  ✅   |   ✅    |   —   |   —   |    —     |    —     |   —   |   —    |     —     |    —      |         —           |
 | Channels & Users           |  ✅   |   ✅    |  ✅   |  ✅   | partial  |    —     |  ✅   |   ✅    |     —     |    —      |         ✅          |
 | Reactions                  |  ✅   |   ✅    |  ✅   |   —   |    —     |    ✅     |   —   |   —    |     —     |    —      |         —           |

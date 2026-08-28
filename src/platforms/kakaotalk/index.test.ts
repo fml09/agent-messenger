@@ -10,6 +10,7 @@ import {
   KakaoChatSchema,
   KakaoConfigSchema,
   KakaoLeaveChatResultSchema,
+  KakaoEditResultSchema,
   KakaoMessagePageSchema,
   KakaoMessageSchema,
   KakaoSendResultSchema,
@@ -59,6 +60,10 @@ it('KakaoMessagePageSchema is exported from barrel', () => {
 
 it('KakaoSendResultSchema is exported from barrel', () => {
   expect(typeof KakaoSendResultSchema.parse).toBe('function')
+})
+
+it('KakaoEditResultSchema is exported from barrel', () => {
+  expect(typeof KakaoEditResultSchema.parse).toBe('function')
 })
 
 it('KakaoAccountCredentialsSchema is exported from barrel', () => {

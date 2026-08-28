@@ -19,6 +19,9 @@ import {
   KAKAO_MESSAGE_TYPE,
   type KakaoChat,
   type KakaoDeviceType,
+  type KakaoEditResult,
+  type KakaoEditOptions,
+  type KakaoEditTarget,
   type KakaoLeaveChatResult,
   type KakaoMarkReadResult,
   type KakaoMember,
@@ -711,6 +714,31 @@ function buildReplyExtra(target: KakaoReplyTarget): KakaoReplyExtra {
   }
 }
 
+function encodeEditExtra(value: KakaoEditOptions['extra'] | null | undefined): string | undefined {
+  if (value === undefined || value === null) return undefined
+  if (typeof value === 'string') return value
+  return JSON.stringify(value)
+}
+
+function normalizeEditTarget(target: KakaoEditTarget): {
+  logId: string
+  type?: number
+  extra?: string
+} {
+  if (typeof target === 'string') return { logId: target }
+
+  const logId = 'log_id' in target ? target.log_id : target.logId
+  if (typeof logId !== 'string') {
+    throw new KakaoTalkError('editMessage requires a log_id or message target', 'invalid_log_id')
+  }
+
+  return {
+    logId,
+    type: typeof target.type === 'number' ? target.type : undefined,
+    extra: encodeEditExtra(target.extra ?? target.attachment),
+  }
+}
+
 export class KakaoTalkClient {
   private oauthToken: string | null = null
   private userId: string | null = null
@@ -1311,6 +1339,49 @@ export class KakaoTalkClient {
         }
       } catch (error) {
         throw wrapError(error, 'send_message_failed')
+      }
+    })
+  }
+
+  async editMessage(
+    chatId: string,
+    target: KakaoEditTarget,
+    text: string,
+    options?: KakaoEditOptions,
+  ): Promise<KakaoEditResult> {
+    const normalized = normalizeEditTarget(target)
+    const parsedChatId = parseChatId(chatId)
+    const parsedLogId = parseLogId(normalized.logId)
+
+    let extra: string | undefined
+    try {
+      extra = encodeEditExtra(options?.extra) ?? normalized.extra
+    } catch (cause) {
+      throw new KakaoTalkError('Invalid edit message extra', 'invalid_edit_extra', { cause })
+    }
+
+    const type = typeof options?.type === 'number' ? options.type : (normalized.type ?? KAKAO_MESSAGE_TYPE.TEXT)
+    const editOptions: { type: number; extra?: string; supplement?: string } = { type }
+    if (extra !== undefined) editOptions.extra = extra
+    if (options?.supplement !== undefined) editOptions.supplement = options.supplement
+
+    return this.executeWithReconnect(async ({ session }) => {
+      try {
+        const response = await session.editMessage(parsedChatId, parsedLogId, text, editOptions)
+        if (response.statusCode !== 0) {
+          throw new Error(`MODIFYMSG failed: statusCode=${response.statusCode}`)
+        }
+
+        const bodyStatus = typeof response.body.status === 'number' ? response.body.status : 0
+        return {
+          success: bodyStatus === 0,
+          status_code: bodyStatus,
+          chat_id: chatId,
+          log_id: normalized.logId,
+          message: text,
+        }
+      } catch (error) {
+        throw wrapError(error, 'edit_message_failed')
       }
     })
   }

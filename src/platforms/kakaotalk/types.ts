@@ -31,7 +31,9 @@ export interface KakaoConfig {
   accounts: Record<string, KakaoAccountCredentials>
 }
 
-export type KakaoDeviceType = 'pc' | 'tablet'
+// Explicit experimental profile for probing the Android main-device slot.
+// The safer `tablet` sub-device profile remains the default.
+export type KakaoDeviceType = 'pc' | 'tablet' | 'android-main'
 
 export interface KakaoAuthOptions {
   email?: string
@@ -66,7 +68,8 @@ export const KAKAO_NEXT_ACTIONS: Record<string, { next_action: string; message: 
   },
   choose_device: {
     next_action: 'choose_device',
-    message: 'Tablet slot occupied. Provide --device-type pc or --device-type tablet with --force to replace.',
+    message:
+      'Tablet slot occupied. Use --device-type pc or --device-type tablet with --force; android-main is experimental and single-device.',
   },
 }
 
@@ -136,6 +139,27 @@ export interface KakaoSendResult {
   log_id: string
   sent_at: number
 }
+
+export interface KakaoEditResult {
+  success: boolean
+  status_code: number
+  chat_id: string
+  log_id: string
+  message: string
+}
+
+export type KakaoEditExtra = string | Record<string, unknown> | unknown[]
+
+export interface KakaoEditOptions {
+  type?: number
+  extra?: KakaoEditExtra
+  supplement?: string
+}
+
+export type KakaoEditTarget =
+  | string
+  | { log_id: string; type?: number; attachment?: Record<string, unknown> | null; extra?: KakaoEditExtra }
+  | { logId: string; type?: number; attachment?: Record<string, unknown> | null; extra?: KakaoEditExtra }
 
 // LOCO message_type values. Source: KakaoTalk APK 26.4.2 + typeclaw inbound parser.
 export const KAKAO_MESSAGE_TYPE = {
@@ -292,6 +316,14 @@ export const KakaoMemberSnapshotSchema = z.object({
   consistency_basis: z.literal('stable_double_read_chatinfo_getmem'),
 })
 
+export const KakaoEditResultSchema = z.object({
+  success: z.boolean(),
+  status_code: z.number(),
+  chat_id: z.string(),
+  log_id: z.string(),
+  message: z.string(),
+})
+
 export const KakaoSendResultSchema = z.object({
   success: z.boolean(),
   status_code: z.number(),
@@ -355,7 +387,7 @@ export const KakaoAccountCredentialsSchema = z.object({
   user_id: z.string(),
   refresh_token: z.string().optional(),
   device_uuid: z.string(),
-  device_type: z.enum(['pc', 'tablet']),
+  device_type: z.enum(['pc', 'tablet', 'android-main']),
   auth_method: z.enum(['login', 'extract']).optional(),
   created_at: z.string(),
   updated_at: z.string(),

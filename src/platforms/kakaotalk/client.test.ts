@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, it } from 'bun:test'
 
 import { KakaoTalkClient, KakaoTalkError } from './client'
+import { KAKAO_MESSAGE_TYPE } from './types'
 
 // Mock LocoSession at module level
 const mockLogin = mock(() => Promise.resolve({}))
@@ -13,6 +14,7 @@ const mockGetAllMembers = mock(() => Promise.resolve({}))
 const mockGetMembersByIds = mock(() => Promise.resolve({}))
 const mockSyncMessages = mock(() => Promise.resolve({}))
 const mockSendMessage = mock(() => Promise.resolve({}))
+const mockEditMessage = mock(() => Promise.resolve({}))
 const mockSendReply = mock(() => Promise.resolve({}))
 const mockMarkRead = mock(() => Promise.resolve({}))
 const mockLeaveChat = mock(() => Promise.resolve({}))
@@ -33,6 +35,7 @@ mock.module('./protocol/session', () => ({
     getMembersByIds = mockGetMembersByIds
     syncMessages = mockSyncMessages
     sendMessage = mockSendMessage
+    editMessage = mockEditMessage
     sendReply = mockSendReply
     markRead = mockMarkRead
     leaveChat = mockLeaveChat
@@ -75,6 +78,7 @@ function resetAllMocks() {
   mockGetMembersByIds.mockReset()
   mockSyncMessages.mockReset()
   mockSendMessage.mockReset()
+  mockEditMessage.mockReset()
   mockSendReply.mockReset()
   mockMarkRead.mockReset()
   mockLeaveChat.mockReset()
@@ -1626,6 +1630,93 @@ describe('KakaoTalkClient', () => {
       const [, , extra] = mockSendReply.mock.calls[0] as [unknown, string, Record<string, unknown>]
       expect(extra.attach_type).toBe(2)
       expect(extra.src_type).toBe(2)
+
+      client.close()
+    })
+  })
+
+  describe('editMessage', () => {
+    it('sends MODIFYMSG fields and returns the normalized edit result', async () => {
+      mockEditMessage.mockResolvedValueOnce({ statusCode: 0, body: { status: 0 } })
+      const client = await new KakaoTalkClient().login({ oauthToken: 'token', userId: 'user1', deviceUuid: 'device1' })
+
+      const result = await client.editMessage('100', '42', 'edited text')
+
+      const [chatIdArg, logIdArg, textArg, optionsArg] = mockEditMessage.mock.calls[0] as [
+        { toString(): string },
+        { toString(): string },
+        string,
+        { type: number; extra?: string; supplement?: string },
+      ]
+      expect(chatIdArg.toString()).toBe('100')
+      expect(logIdArg.toString()).toBe('42')
+      expect(textArg).toBe('edited text')
+      expect(optionsArg).toEqual({ type: 1 })
+      expect(result).toEqual({
+        success: true,
+        status_code: 0,
+        chat_id: '100',
+        log_id: '42',
+        message: 'edited text',
+      })
+
+      client.close()
+    })
+
+    it('accepts a message target and preserves its type and attachment unless overridden', async () => {
+      mockEditMessage.mockResolvedValueOnce({ statusCode: 0, body: { status: 0 } })
+      const client = await new KakaoTalkClient().login({ oauthToken: 'token', userId: 'user1', deviceUuid: 'device1' })
+
+      await client.editMessage(
+        '100',
+        { log_id: '42', type: KAKAO_MESSAGE_TYPE.PHOTO, attachment: { k: 'photo-key' } },
+        'caption',
+        { supplement: 'supplement' },
+      )
+
+      const [, , , optionsArg] = mockEditMessage.mock.calls[0] as [
+        unknown,
+        unknown,
+        unknown,
+        { type: number; extra: string; supplement?: string },
+      ]
+      expect(optionsArg).toEqual({
+        type: KAKAO_MESSAGE_TYPE.PHOTO,
+        extra: JSON.stringify({ k: 'photo-key' }),
+        supplement: 'supplement',
+      })
+
+      client.close()
+    })
+
+    it('returns a failed edit result when the server rejects MODIFYMSG', async () => {
+      mockEditMessage.mockResolvedValueOnce({ statusCode: 0, body: { status: -500 } })
+      const client = await new KakaoTalkClient().login({ oauthToken: 'token', userId: 'user1', deviceUuid: 'device1' })
+
+      const result = await client.editMessage('100', '42', 'edited text')
+
+      expect(result).toEqual({
+        success: false,
+        status_code: -500,
+        chat_id: '100',
+        log_id: '42',
+        message: 'edited text',
+      })
+
+      client.close()
+    })
+
+    it('wraps transport failures with edit_message_failed', async () => {
+      mockEditMessage.mockRejectedValueOnce(new Error('Socket closed'))
+      const client = await new KakaoTalkClient().login({ oauthToken: 'token', userId: 'user1', deviceUuid: 'device1' })
+
+      try {
+        await client.editMessage('100', '42', 'edited text')
+        throw new Error('expected to throw')
+      } catch (error) {
+        expect(error).toBeInstanceOf(KakaoTalkError)
+        expect((error as KakaoTalkError).code).toBe('edit_message_failed')
+      }
 
       client.close()
     })

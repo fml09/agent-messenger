@@ -32,6 +32,24 @@ import { KakaoTalkClient } from 'agent-messenger/kakaotalk'
 const client = await new KakaoTalkClient().login()
 ```
 
+### Device profiles
+
+`tablet` is the default Android sub-device profile. `android-main` is an
+explicit experimental profile that sends `dtype=1` and must be limited to an
+isolated test account:
+
+```typescript
+const client = await new KakaoTalkClient().login({
+  oauthToken,
+  userId,
+  deviceUuid,
+  deviceType: 'android-main',
+})
+```
+
+The profile does not make message editing universally available; KakaoTalk
+still decides whether the account and message satisfy its edit restrictions.
+
 ### Login errors
 
 The first operation opens the LOCO session lazily. If Kakao rejects `LOGINLIST`, `KakaoTalkError` preserves a typed code and safe numeric server status:
@@ -143,6 +161,29 @@ Each `KakaoMember` includes `user_id`, `nickname`, profile image URLs, `status_m
 const result = await client.sendMessage('9876543210', 'Hello from SDK!')
 // → KakaoSendResult { success, status_code, chat_id, log_id, sent_at }
 ```
+
+### Editing
+
+```typescript
+// `log_id` comes from `getMessages()` or the result of `sendMessage()`.
+const edited = await client.editMessage('9876543210', '3846830417126748160', 'Updated text')
+// → KakaoEditResult { success, status_code, chat_id, log_id, message }
+```
+
+The SDK sends KakaoTalk's LOCO `MODIFYMSG` command. Pass a `KakaoMessage` (or
+another object with `log_id`) instead of a string when you want to preserve the
+message type and attachment metadata:
+
+```typescript
+const target = (await client.getMessages('9876543210'))[0]
+if (target) {
+  await client.editMessage('9876543210', target, 'Updated text')
+}
+```
+
+KakaoTalk enforces ownership and any server-side edit restrictions. A rejected
+edit returns `success: false`; transport failures throw `KakaoTalkError` with
+code `edit_message_failed`.
 
 #### Attachments
 

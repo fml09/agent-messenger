@@ -129,6 +129,24 @@ agent-kakaotalk auth login --device-type pc
 agent-kakaotalk auth login --device-type tablet --force
 ```
 
+### Experimental Android-main profile
+
+`android-main` is an opt-in Android main-device probe that sends `dtype=1`
+in `LOGINLIST` and uses main-device `CHECKIN` semantics. It is not the default
+and must be used only with an isolated test account.
+
+```bash
+# First login: use a fresh Android-main device UUID and confirm on the phone
+agent-kakaotalk auth login --device-type android-main
+
+# Use --force only when Kakao reports that the main-device slot is occupied
+agent-kakaotalk auth login --device-type android-main --force
+```
+
+When switching from an existing tablet account, the CLI does not reuse that
+tablet UUID. Confirm the result with `agent-kakaotalk auth status`; it should
+report `device_type: "android-main"`.
+
 ## Multi-Account
 
 KakaoTalk supports multiple accounts. Each login stores credentials separately, keyed by user ID.
@@ -355,6 +373,9 @@ agent-kakaotalk message send <chat-id> "Hello world" --pretty
 # Send a quoted reply to a specific message (use a log_id from `message list`)
 agent-kakaotalk message send <chat-id> "Replying to this" --reply-to <log-id>
 
+# Edit one of your text messages by log ID
+agent-kakaotalk message edit <chat-id> <log-id> "Updated text"
+
 # Send a file (auto-routes by MIME: photo / video / audio / generic file)
 agent-kakaotalk message upload <chat-id> ./photo.jpg
 agent-kakaotalk message upload <chat-id> ./clip.mp4
@@ -378,6 +399,7 @@ agent-kakaotalk message mark-read <chat-id> <log-id> --link-id <li>   # open cha
 agent-kakaotalk message list <chat-id> --account <account-id>
 agent-kakaotalk message send <chat-id> "Hello" --account <account-id>
 agent-kakaotalk message upload <chat-id> ./photo.jpg --account <account-id>
+agent-kakaotalk message edit <chat-id> <log-id> "Updated text" --account <account-id>
 agent-kakaotalk message mark-read <chat-id> <log-id> --account <account-id>
 ```
 
@@ -394,6 +416,31 @@ agent-kakaotalk message send <chat-id> "Good point!" --reply-to 1234567890
 ```
 
 If the `log_id` is not found in the latest 100 messages, the command errors out without sending.
+
+#### Editing Messages
+
+`message edit` sends a LOCO `MODIFYMSG` packet for an existing message. Pass
+the numeric `log_id` from `message list`; KakaoTalk enforces ownership and
+other server-side edit restrictions.
+
+```bash
+agent-kakaotalk message edit <chat-id> <log-id> "Updated text"
+```
+
+Output (JSON by default; `--pretty` pretty-prints the same JSON):
+
+```json
+{
+  "success": true,
+  "status_code": 0,
+  "chat_id": "9876543210",
+  "log_id": "3846830417126748160",
+  "message": "Updated text"
+}
+```
+
+The process exits non-zero when `success` is `false`. Transport failures are
+reported as `edit_message_failed`.
 
 #### Sending Attachments
 
@@ -640,6 +687,9 @@ try {
   const chatId = chats[0].chat_id
   const result = await client.sendMessage(chatId, 'Hello from SDK!')
 
+  // Edit the text message by its returned log_id
+  await client.editMessage(chatId, result.log_id, 'Updated text')
+
   // Send a file (photo / video / audio / file auto-routed by MIME). Pass
   // an array to send several at once — all-image arrays become a gallery.
   const photo = await Bun.file('./photo.jpg').bytes()
@@ -669,7 +719,6 @@ See the [KakaoTalk SDK documentation](https://agent-messenger.dev/docs/sdk/kakao
 - No chat room creation
 - No friend list management
 - No reactions or emoji
-- No message editing or deletion
 - No open chat (오픈채팅) browsing or joining
 - No search across chats
 - Stickers / emoticons cannot be sent (inbound stickers expose pack/path metadata, but the sticker store requires desktop-app purchase flows the SDK does not replicate). Photos, videos, audio, and arbitrary files can both be received and sent — see [`message upload`](#message-commands) and [`KakaoTalkClient.sendAttachment`](#sdk-programmatic-usage).
