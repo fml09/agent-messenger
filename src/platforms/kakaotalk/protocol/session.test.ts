@@ -4,9 +4,13 @@ import { Long } from 'bson'
 
 import {
   buildEditMessageBody,
+  buildReactionActionBody,
   buildTypingActionBody,
   editMessagePacket,
   EDIT_MESSAGE_METHOD,
+  removeReactionPacket,
+  REACTION_ACTION_METHOD,
+  sendReactionPacket,
   sendTypingPacket,
   TYPING_ACTION_METHOD,
 } from './session'
@@ -118,6 +122,41 @@ describe('sendTypingPacket → sendPacket wire boundary', () => {
     expect(packet.body).toEqual(buildTypingActionBody(Long.fromString('123'), Long.fromString('456')))
   })
 })
+describe('reaction wire contract', () => {
+  it('builds the verified ACTION reaction body', () => {
+    const body = buildReactionActionBody(Long.fromString('123'), Long.fromString('456'), 1)
+
+    expect(body).toEqual({
+      chatId: Long.fromString('123'),
+      logId: Long.fromString('456'),
+      type: 1,
+    })
+  })
+
+  it('rejects non-positive or non-integer reaction types', () => {
+    expect(() => buildReactionActionBody(Long.fromString('123'), Long.fromString('456'), 0)).toThrow()
+    expect(() => buildReactionActionBody(Long.fromString('123'), Long.fromString('456'), 1.5)).toThrow()
+  })
+
+  it('uses ACTION for both add and removal toggles', async () => {
+    const { connection, sent } = fakeConnection()
+
+    await sendReactionPacket(connection, Long.fromString('123'), Long.fromString('456'), 1)
+    await removeReactionPacket(connection, Long.fromString('123'), Long.fromString('456'), 1)
+
+    expect(sent).toEqual([
+      {
+        method: REACTION_ACTION_METHOD,
+        body: buildReactionActionBody(Long.fromString('123'), Long.fromString('456'), 1),
+      },
+      {
+        method: REACTION_ACTION_METHOD,
+        body: buildReactionActionBody(Long.fromString('123'), Long.fromString('456'), 1),
+      },
+    ])
+  })
+})
+
 describe('message edit wire contract', () => {
   it('uses the MODIFYMSG opcode', () => {
     expect(EDIT_MESSAGE_METHOD).toBe('MODIFYMSG')
