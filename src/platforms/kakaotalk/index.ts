@@ -1,4 +1,5 @@
 export { KakaoTalkClient, KakaoTalkError } from './client'
+export type { KakaoTalkClientOptions } from './client'
 export { classifyKakaoChat, isOpenKakaoChatType } from './chat-classifier'
 export type { KakaoChatKind } from './chat-classifier'
 export { KakaoCredentialManager, CredentialManager } from './credential-manager'
@@ -17,7 +18,13 @@ export type {
   KakaoEditOptions,
   KakaoEditResult,
   KakaoEditTarget,
+  KakaoReactionCatalogItem,
+  KakaoReactionId,
+  KakaoReactionMemberGroup,
+  KakaoReactionOptions,
   KakaoReactionResult,
+  KakaoReactionTarget,
+  KakaoReactionTargetObject,
   KakaoEmoticonKind,
   KakaoEmoticonMessageType,
   KakaoFileExtra,
@@ -47,7 +54,6 @@ export {
   KAKAO_EMOTICON_KIND_BY_TYPE,
   KAKAO_EMOTICON_MESSAGE_TYPES,
   KAKAO_MESSAGE_TYPE,
-  KAKAO_REACTION_TYPE,
   KakaoAccountCredentialsSchema,
   KakaoChatSchema,
   KakaoConfigSchema,

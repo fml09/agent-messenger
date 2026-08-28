@@ -15,12 +15,18 @@ import { LANG, PC_OS_NAME, getLocoDeviceConfig } from './protocol/config'
 import { uploadMediaToLoco, uploadMultiMediaEntry } from './protocol/media-uploader'
 import { LocoSession } from './protocol/session'
 import type { ChatListResponse, LocoPacket, LoginListResponse, SyncState } from './protocol/types'
+import { KakaoReactionClient, type KakaoReactionAction } from './reaction-client'
 import {
   KAKAO_MESSAGE_TYPE,
   type KakaoChat,
   type KakaoDeviceType,
   type KakaoEditResult,
+  type KakaoReactionCatalogItem,
+  type KakaoReactionId,
+  type KakaoReactionMemberGroup,
+  type KakaoReactionOptions,
   type KakaoReactionResult,
+  type KakaoReactionTarget,
   type KakaoEditOptions,
   type KakaoEditTarget,
   type KakaoLeaveChatResult,
@@ -515,11 +521,6 @@ function assertLocoOk(response: LocoPacket, command: string): void {
   }
 }
 
-function mutationStatusCode(response: LocoPacket): number {
-  const bodyStatus = response.body.status
-  return typeof bodyStatus === 'number' && bodyStatus !== 0 ? bodyStatus : response.statusCode
-}
-
 function formatMember(member: Record<string, unknown>): KakaoMember {
   return {
     user_id: longToString(member.userId),
@@ -745,6 +746,53 @@ function normalizeEditTarget(target: KakaoEditTarget): {
   }
 }
 
+type NormalizedReactionTarget = {
+  logId: string
+  linkId?: string
+  isOpenChat?: boolean
+}
+
+function normalizeReactionTarget(target: KakaoReactionTarget): NormalizedReactionTarget {
+  if (typeof target === 'string' || typeof target === 'number') {
+    const logId = String(target).trim()
+    if (!logId || logId === '0') {
+      throw new KakaoTalkError('sendReaction requires a non-zero log ID', 'invalid_log_id')
+    }
+    return { logId }
+  }
+
+  const logIdValue = target.log_id ?? target.logId
+  if (typeof logIdValue !== 'string' && typeof logIdValue !== 'number') {
+    throw new KakaoTalkError('sendReaction requires a log_id or message target', 'invalid_log_id')
+  }
+
+  const logId = String(logIdValue).trim()
+  if (!logId || logId === '0') {
+    throw new KakaoTalkError('sendReaction requires a non-zero log ID', 'invalid_log_id')
+  }
+
+  const linkIdValue = target.linkId ?? target.room?.openLinkId
+  return {
+    logId,
+    linkId: linkIdValue === undefined ? undefined : String(linkIdValue),
+    isOpenChat: target.isOpenChat ?? target.room?.isOpenChat,
+  }
+}
+
+function normalizeReactionId(reactionId: KakaoReactionId): string {
+  const normalized = String(reactionId).trim()
+  if (!normalized) {
+    throw new KakaoTalkError('Reaction ID is required', 'invalid_reaction_id')
+  }
+  return normalized
+}
+
+type KakaoFetchImpl = (input: string | URL | Request, init?: RequestInit) => Promise<Response>
+
+export interface KakaoTalkClientOptions {
+  fetchImpl?: KakaoFetchImpl
+}
+
 export class KakaoTalkClient {
   private oauthToken: string | null = null
   private userId: string | null = null
@@ -752,10 +800,16 @@ export class KakaoTalkClient {
   private deviceType: KakaoDeviceType = 'tablet'
   private state: SessionState | null = null
   private initPromise: Promise<SessionState> | null = null
+  private reactionClient: KakaoReactionClient | null = null
+  private readonly fetchImpl: KakaoFetchImpl
   private closed = false
   private pushHandlers = new Set<KakaoPushHandler>()
   private sessionEventHandlers = new Set<KakaoSessionEventHandler>()
   private nameCache = new MemberNameCache()
+
+  constructor(options: KakaoTalkClientOptions = {}) {
+    this.fetchImpl = options.fetchImpl ?? fetch
+  }
 
   async login(
     credentials?: { oauthToken: string; userId: string; deviceUuid?: string; deviceType?: KakaoDeviceType },
@@ -794,6 +848,19 @@ export class KakaoTalkClient {
     if (this.oauthToken === null) {
       throw new KakaoTalkError('Not authenticated. Call .login() first.', 'not_authenticated')
     }
+  }
+
+  private getReactionClient(): KakaoReactionClient {
+    this.ensureAuth()
+    if (this.closed) throw new KakaoTalkError('Client is closed', 'client_closed')
+    if (!this.reactionClient) {
+      this.reactionClient = new KakaoReactionClient({
+        accessToken: this.oauthToken!,
+        deviceUuid: this.deviceUuid!,
+        fetchImpl: this.fetchImpl,
+      })
+    }
+    return this.reactionClient
   }
 
   private async ensureSession(): Promise<SessionState> {
@@ -1349,44 +1416,157 @@ export class KakaoTalkClient {
     })
   }
 
-  async addReaction(chatId: string, logId: string, reactionType: number): Promise<KakaoReactionResult> {
-    const parsedChatId = parseChatId(chatId)
-    const parsedLogId = parseLogId(logId)
-    return this.executeWithReconnect(async ({ session }) => {
-      try {
-        const response = await session.addReaction(parsedChatId, parsedLogId, reactionType)
-        const statusCode = mutationStatusCode(response)
+  private async executeReaction(
+    action: KakaoReactionAction,
+    chatId: string,
+    target: NormalizedReactionTarget,
+    reactionId: string,
+    options: KakaoReactionOptions | undefined,
+    errorCode: string,
+  ): Promise<KakaoReactionResult> {
+    this.ensureAuth()
+    if (this.closed) throw new KakaoTalkError('Client is closed', 'client_closed')
+
+    const linkId = options?.linkId ?? target.linkId
+    if (target.isOpenChat === true && (linkId === undefined || linkId === '' || linkId === 0 || linkId === '0')) {
+      throw new KakaoTalkError('Open chat reaction requires an openLinkId', 'missing_open_link_id')
+    }
+
+    try {
+      const request = { chatId, logId: target.logId, reactionId, linkId }
+      const response =
+        action === 'add' ? await this.getReactionClient().add(request) : await this.getReactionClient().remove(request)
+
+      if (response.status !== 200) {
         return {
-          success: statusCode === 0,
-          status_code: statusCode,
+          success: false,
+          status_code: response.status,
           chat_id: chatId,
-          log_id: logId,
-          reaction_type: reactionType,
+          log_id: target.logId,
+          reaction_id: reactionId,
+          action,
+          revision: response.revision ?? null,
         }
-      } catch (error) {
-        throw wrapError(error, 'add_reaction_failed')
       }
-    })
+
+      return {
+        success: true,
+        status_code: 0,
+        chat_id: chatId,
+        log_id: target.logId,
+        reaction_id: reactionId,
+        action,
+        revision: response.revision ?? null,
+      }
+    } catch (error) {
+      throw wrapError(error, errorCode)
+    }
   }
 
-  async removeReaction(chatId: string, logId: string, reactionType: number): Promise<KakaoReactionResult> {
-    const parsedChatId = parseChatId(chatId)
-    const parsedLogId = parseLogId(logId)
-    return this.executeWithReconnect(async ({ session }) => {
-      try {
-        const response = await session.removeReaction(parsedChatId, parsedLogId, reactionType)
-        const statusCode = mutationStatusCode(response)
-        return {
-          success: statusCode === 0,
-          status_code: statusCode,
-          chat_id: chatId,
-          log_id: logId,
-          reaction_type: reactionType,
-        }
-      } catch (error) {
-        throw wrapError(error, 'remove_reaction_failed')
+  async sendReaction(
+    chatId: string,
+    target: KakaoReactionTarget,
+    reactionId: KakaoReactionId,
+    options?: KakaoReactionOptions,
+  ): Promise<KakaoReactionResult> {
+    return this.executeReaction(
+      'add',
+      chatId,
+      normalizeReactionTarget(target),
+      normalizeReactionId(reactionId),
+      options,
+      'add_reaction_failed',
+    )
+  }
+
+  async addReaction(
+    chatId: string,
+    logId: string,
+    reactionId: KakaoReactionId,
+    options?: KakaoReactionOptions,
+  ): Promise<KakaoReactionResult> {
+    return this.sendReaction(chatId, logId, reactionId, options)
+  }
+
+  async removeReaction(
+    chatId: string,
+    logId: string,
+    reactionId: KakaoReactionId,
+    options?: KakaoReactionOptions,
+  ): Promise<KakaoReactionResult> {
+    return this.executeReaction(
+      'remove',
+      chatId,
+      normalizeReactionTarget(logId),
+      normalizeReactionId(reactionId),
+      options,
+      'remove_reaction_failed',
+    )
+  }
+
+  async searchReactions(query: string): Promise<KakaoReactionCatalogItem[]> {
+    this.ensureAuth()
+    if (this.closed) throw new KakaoTalkError('Client is closed', 'client_closed')
+
+    try {
+      const response = await this.getReactionClient().search(query)
+      if (response.status !== 200) {
+        throw new Error(`Reaction search failed: status=${response.status}`)
       }
-    })
+
+      const body = response.body
+      const results =
+        body !== null && typeof body === 'object' && !Array.isArray(body)
+          ? (body as Record<string, unknown>).results
+          : undefined
+      if (!Array.isArray(results)) {
+        throw new Error('Reaction search response missing results')
+      }
+
+      return results.filter(
+        (item): item is KakaoReactionCatalogItem =>
+          item !== null &&
+          typeof item === 'object' &&
+          !Array.isArray(item) &&
+          typeof (item as Record<string, unknown>).o === 'string',
+      )
+    } catch (error) {
+      throw wrapError(error, 'search_reactions_failed')
+    }
+  }
+
+  async getReactionMembers(
+    chatId: string,
+    logId: string,
+    options?: KakaoReactionOptions,
+  ): Promise<KakaoReactionMemberGroup[]> {
+    this.ensureAuth()
+    if (this.closed) throw new KakaoTalkError('Client is closed', 'client_closed')
+
+    try {
+      const response = await this.getReactionClient().member(chatId, logId, options?.linkId)
+      if (response.status !== 200) {
+        throw new Error(`Reaction member lookup failed: status=${response.status}`)
+      }
+
+      const body = response.body
+      const details =
+        body !== null && typeof body === 'object' && !Array.isArray(body)
+          ? (body as Record<string, unknown>).details
+          : undefined
+      if (!Array.isArray(details)) {
+        throw new Error('Reaction member response missing details')
+      }
+
+      return details.flatMap((item) => {
+        if (item === null || typeof item !== 'object' || Array.isArray(item)) return []
+        const record = item as Record<string, unknown>
+        if (typeof record.o !== 'string' || !Array.isArray(record.u)) return []
+        return [{ reactionId: record.o, userIds: record.u.map(String) }]
+      })
+    } catch (error) {
+      throw wrapError(error, 'get_reaction_members_failed')
+    }
   }
 
   async editMessage(
@@ -1893,6 +2073,7 @@ export class KakaoTalkClient {
     }
     this.state = null
     this.initPromise = null
+    this.reactionClient = null
     this.pushHandlers.clear()
     this.sessionEventHandlers.clear()
     this.nameCache.clear()

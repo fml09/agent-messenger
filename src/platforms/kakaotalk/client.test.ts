@@ -14,8 +14,6 @@ const mockGetAllMembers = mock(() => Promise.resolve({}))
 const mockGetMembersByIds = mock(() => Promise.resolve({}))
 const mockSyncMessages = mock(() => Promise.resolve({}))
 const mockSendMessage = mock(() => Promise.resolve({}))
-const mockAddReaction = mock(() => Promise.resolve({}))
-const mockRemoveReaction = mock(() => Promise.resolve({}))
 const mockEditMessage = mock(() => Promise.resolve({}))
 const mockSendReply = mock(() => Promise.resolve({}))
 const mockMarkRead = mock(() => Promise.resolve({}))
@@ -37,8 +35,6 @@ mock.module('./protocol/session', () => ({
     getMembersByIds = mockGetMembersByIds
     syncMessages = mockSyncMessages
     sendMessage = mockSendMessage
-    addReaction = mockAddReaction
-    removeReaction = mockRemoveReaction
     editMessage = mockEditMessage
     sendReply = mockSendReply
     markRead = mockMarkRead
@@ -70,6 +66,16 @@ function memberChannelInfo(
     },
   }
 }
+function reactionResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+function reactionRevisionResponse(revision = '7'): Response {
+  return reactionResponse({ logExtras: { '42': { revision } } })
+}
 
 function resetAllMocks() {
   mockLogin.mockReset()
@@ -82,8 +88,6 @@ function resetAllMocks() {
   mockGetMembersByIds.mockReset()
   mockSyncMessages.mockReset()
   mockSendMessage.mockReset()
-  mockAddReaction.mockReset()
-  mockRemoveReaction.mockReset()
   mockEditMessage.mockReset()
   mockSendReply.mockReset()
   mockMarkRead.mockReset()
@@ -1642,57 +1646,230 @@ describe('KakaoTalkClient', () => {
   })
 
   describe('reactions', () => {
-    it('normalizes a successful add reaction result', async () => {
-      mockAddReaction.mockResolvedValueOnce({ statusCode: 0, body: { status: 0 } })
-      const client = await new KakaoTalkClient().login({ oauthToken: 'token', userId: 'user1', deviceUuid: 'device1' })
+    it('reads the current revision before adding a reaction', async () => {
+      const fetchImpl = mock(async () => reactionResponse({ revision: '8' }))
+      fetchImpl.mockResolvedValueOnce(reactionRevisionResponse('7'))
+      const client = await new KakaoTalkClient({ fetchImpl }).login({
+        oauthToken: 'token',
+        userId: 'user1',
+        deviceUuid: 'device1',
+      })
 
-      const result = await client.addReaction('100', '42', 1)
+      const result = await client.addReaction('100', '42', '1200282_026')
 
-      expect(mockAddReaction).toHaveBeenCalledTimes(1)
-      const [chatIdArg, logIdArg, reactionTypeArg] = mockAddReaction.mock.calls[0] as [
-        { toString(): string },
-        { toString(): string },
-        number,
-      ]
-      expect(chatIdArg.toString()).toBe('100')
-      expect(logIdArg.toString()).toBe('42')
-      expect(reactionTypeArg).toBe(1)
+      expect(fetchImpl).toHaveBeenCalledTimes(2)
+      const [revisionUrl, revisionInit] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit]
+      expect(revisionUrl).toBe('https://talk-pilsner.kakao.com/emoticon/chat/rx/log-extras')
+      expect(JSON.parse(String(revisionInit.body))).toEqual({ chatId: '100', logIds: ['42'] })
+      const [addUrl, addInit] = fetchImpl.mock.calls[1] as unknown as [string, RequestInit]
+      expect(addUrl).toBe('https://talk-pilsner.kakao.com/emoticon/chat/rx/do')
+      expect(JSON.parse(String(addInit.body))).toMatchObject({
+        chatId: '100',
+        logId: '42',
+        revision: '7',
+        reactions: { add: [{ k: 2, o: '1200282_026' }] },
+      })
       expect(result).toEqual({
         success: true,
         status_code: 0,
         chat_id: '100',
         log_id: '42',
-        reaction_type: 1,
+        reaction_id: '1200282_026',
+        action: 'add',
+        revision: '7',
+      })
+      expect(mockLogin).not.toHaveBeenCalled()
+
+      client.close()
+    })
+
+    it('returns an unsuccessful result when the reaction endpoint rejects the request', async () => {
+      const fetchImpl = mock(async () => reactionResponse({ error: 'invalid reaction' }, 400))
+      fetchImpl.mockResolvedValueOnce(reactionRevisionResponse('7'))
+      const client = await new KakaoTalkClient({ fetchImpl }).login({
+        oauthToken: 'token',
+        userId: 'user1',
+        deviceUuid: 'device1',
       })
 
-      client.close()
-    })
-
-    it('uses the body status for a rejected add reaction', async () => {
-      mockAddReaction.mockResolvedValueOnce({ statusCode: 0, body: { status: -203 } })
-      const client = await new KakaoTalkClient().login({ oauthToken: 'token', userId: 'user1', deviceUuid: 'device1' })
-
-      const result = await client.addReaction('100', '42', 1)
-
-      expect(result.success).toBe(false)
-      expect(result.status_code).toBe(-203)
-
-      client.close()
-    })
-
-    it('routes removal through the same normalized mutation result', async () => {
-      mockRemoveReaction.mockResolvedValueOnce({ statusCode: 0, body: { status: 0 } })
-      const client = await new KakaoTalkClient().login({ oauthToken: 'token', userId: 'user1', deviceUuid: 'device1' })
-
-      const result = await client.removeReaction('100', '42', 1)
+      const result = await client.addReaction('100', '42', 'invalid-reaction-id')
 
       expect(result).toEqual({
-        success: true,
-        status_code: 0,
+        success: false,
+        status_code: 400,
         chat_id: '100',
         log_id: '42',
-        reaction_type: 1,
+        reaction_id: 'invalid-reaction-id',
+        action: 'add',
+        revision: '7',
       })
+
+      client.close()
+    })
+
+    it('accepts package-style targets and forwards the OpenChat link ID', async () => {
+      const fetchImpl = mock(async () => reactionResponse({ revision: '8' }))
+      fetchImpl
+        .mockResolvedValueOnce(reactionRevisionResponse('7'))
+        .mockResolvedValueOnce(reactionResponse({ revision: '8' }))
+        .mockResolvedValueOnce(reactionRevisionResponse('8'))
+        .mockResolvedValueOnce(reactionResponse({ revision: '9' }))
+      const client = await new KakaoTalkClient({ fetchImpl }).login({
+        oauthToken: 'token',
+        userId: 'user1',
+        deviceUuid: 'device1',
+      })
+
+      await client.addReaction('100', '42', '1200282_026', { linkId: '777' })
+      await client.removeReaction('100', '42', '1200282_026', { linkId: '777' })
+
+      const [, addInit] = fetchImpl.mock.calls[1] as unknown as [string, RequestInit]
+      const [, removeInit] = fetchImpl.mock.calls[3] as unknown as [string, RequestInit]
+      expect(JSON.parse(String(addInit.body))).toMatchObject({
+        chatId: '100',
+        logId: '42',
+        revision: '7',
+        linkId: '777',
+        reactions: { add: [{ k: 2, o: '1200282_026' }] },
+      })
+      expect(JSON.parse(String(removeInit.body))).toMatchObject({
+        chatId: '100',
+        logId: '42',
+        revision: '8',
+        linkId: '777',
+        reactions: { remove: [{ k: 2, o: '1200282_026' }] },
+      })
+
+      client.close()
+    })
+
+    it('removes a reaction through the remove action', async () => {
+      const fetchImpl = mock(async () => reactionResponse({ revision: '8' }))
+      fetchImpl.mockResolvedValueOnce(reactionRevisionResponse('7'))
+      const client = await new KakaoTalkClient({ fetchImpl }).login({
+        oauthToken: 'token',
+        userId: 'user1',
+        deviceUuid: 'device1',
+      })
+
+      const result = await client.removeReaction('100', '42', '1200282_026')
+
+      expect(result).toMatchObject({
+        success: true,
+        action: 'remove',
+        reaction_id: '1200282_026',
+        revision: '7',
+      })
+      const [, init] = fetchImpl.mock.calls[1] as unknown as [string, RequestInit]
+      expect(JSON.parse(String(init.body))).toMatchObject({ reactions: { remove: [{ k: 2, o: '1200282_026' }] } })
+
+      client.close()
+    })
+
+    it('searches the expanded reaction catalog', async () => {
+      const fetchImpl = mock(async () =>
+        reactionResponse({
+          results: [{ o: '1200282_026', k: 2, a: { ko: '엄지척' } }, { ignored: true }],
+        }),
+      )
+      const client = await new KakaoTalkClient({ fetchImpl }).login({
+        oauthToken: 'token',
+        userId: 'user1',
+        deviceUuid: 'device1',
+      })
+
+      const results = await client.searchReactions('엄지척')
+
+      expect(results).toEqual([{ o: '1200282_026', k: 2, a: { ko: '엄지척' } }])
+      const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit]
+      expect(url).toBe('https://talk-pilsner.kakao.com/emoticon/chat/rx/views/reactions/instant-search')
+      expect(JSON.parse(String(init.body))).toMatchObject({ q: '엄지척', sequence: 1 })
+
+      client.close()
+    })
+
+    it('lists reaction members grouped by reaction ID', async () => {
+      const fetchImpl = mock(async () =>
+        reactionResponse({
+          details: [
+            { o: '1200282_026', u: ['1', 2] },
+            { o: '1200300_001', u: [] },
+          ],
+        }),
+      )
+      const client = await new KakaoTalkClient({ fetchImpl }).login({
+        oauthToken: 'token',
+        userId: 'user1',
+        deviceUuid: 'device1',
+      })
+
+      const members = await client.getReactionMembers('100', '42')
+
+      expect(members).toEqual([
+        { reactionId: '1200282_026', userIds: ['1', '2'] },
+        { reactionId: '1200300_001', userIds: [] },
+      ])
+
+      client.close()
+    })
+
+    it('rejects an empty reaction ID before making a request', async () => {
+      const fetchImpl = mock(async () => reactionResponse({ revision: '8' }))
+      const client = await new KakaoTalkClient({ fetchImpl }).login({
+        oauthToken: 'token',
+        userId: 'user1',
+        deviceUuid: 'device1',
+      })
+
+      try {
+        await client.sendReaction('100', '42', '')
+        throw new Error('expected to throw')
+      } catch (error) {
+        expect(error).toBeInstanceOf(KakaoTalkError)
+        expect((error as KakaoTalkError).code).toBe('invalid_reaction_id')
+      }
+      expect(fetchImpl).not.toHaveBeenCalled()
+
+      client.close()
+    })
+
+    it('requires an openLinkId when the target is marked as an open-chat message', async () => {
+      const fetchImpl = mock(async () => reactionResponse({ revision: '8' }))
+      const client = await new KakaoTalkClient({ fetchImpl }).login({
+        oauthToken: 'token',
+        userId: 'user1',
+        deviceUuid: 'device1',
+      })
+
+      try {
+        await client.sendReaction('100', { logId: '42', isOpenChat: true }, '1200282_026')
+        throw new Error('expected to throw')
+      } catch (error) {
+        expect(error).toBeInstanceOf(KakaoTalkError)
+        expect((error as KakaoTalkError).code).toBe('missing_open_link_id')
+      }
+      expect(fetchImpl).not.toHaveBeenCalled()
+
+      client.close()
+    })
+
+    it('wraps reaction transport failures with add_reaction_failed', async () => {
+      const fetchImpl = mock(async () => {
+        throw new Error('Network unavailable')
+      })
+      const client = await new KakaoTalkClient({ fetchImpl }).login({
+        oauthToken: 'token',
+        userId: 'user1',
+        deviceUuid: 'device1',
+      })
+
+      try {
+        await client.sendReaction('100', '42', '1200282_026')
+        throw new Error('expected to throw')
+      } catch (error) {
+        expect(error).toBeInstanceOf(KakaoTalkError)
+        expect((error as KakaoTalkError).code).toBe('add_reaction_failed')
+      }
 
       client.close()
     })
@@ -1702,7 +1879,6 @@ describe('KakaoTalkClient', () => {
     it('sends MODIFYMSG fields and returns the normalized edit result', async () => {
       mockEditMessage.mockResolvedValueOnce({ statusCode: 0, body: { status: 0 } })
       const client = await new KakaoTalkClient().login({ oauthToken: 'token', userId: 'user1', deviceUuid: 'device1' })
-
       const result = await client.editMessage('100', '42', 'edited text')
 
       const [chatIdArg, logIdArg, textArg, optionsArg] = mockEditMessage.mock.calls[0] as [
